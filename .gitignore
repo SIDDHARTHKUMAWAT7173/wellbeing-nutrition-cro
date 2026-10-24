@@ -1,0 +1,29 @@
+# Operating System & Editor Files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Local Timestamped Backups
+*-backup*.html
+*.backup*
+
+# Python Scripts & Virtual Environments
+*.py
+*.pyc
+__pycache__/
+.venv/
+venv/
+env/
+
+# Development Scripts & Generated Test Artifacts
+archive_product.html
+faqs.json
+testimonials_*.txt
+*.pdf
+
+# Root-level generated test screenshots and debug images (Preserve /images directory)
+/*.png
+!images/
+!images/**
