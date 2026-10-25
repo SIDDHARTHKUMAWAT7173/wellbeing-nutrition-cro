@@ -1,7 +1,7 @@
 /**
  * Vercel Serverless Function: /api/chat
  * Handles conversational queries for Wellbeing Nutrition Korean Marine Collagen Peptides
- * Powered by OpenAI gpt-4o-mini
+ * Powered by Google Gemini Developer API (Free Tier)
  */
 
 // In-memory rate limiting (per serverless instance)
@@ -114,11 +114,11 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Verify OpenAI API key
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || apiKey.trim() === '' || apiKey === 'your-openai-api-key-here') {
+  // Verify Google Gemini API key
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '' || apiKey === 'your-gemini-api-key-here') {
     return res.status(503).json({
-      error: 'OpenAI API key is not configured on the server. Please add OPENAI_API_KEY to your Vercel project environment variables.',
+      error: 'Google Gemini API key is not configured on the server. Please add GEMINI_API_KEY to your Vercel project environment variables.',
       code: 'MISSING_API_KEY'
     });
   }
@@ -142,87 +142,134 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Message exceeds maximum length of 2000 characters.' });
   }
 
-  // Validate conversation history (limit to last 10 messages)
+  // Build valid multi-turn contents array for Google Gemini API
+  // Incoming history items: { role: 'user' | 'assistant', content: string }
+  // Gemini expects roles: 'user' and 'model'
   const incomingHistory = Array.isArray(body?.history) ? body.history : [];
   const safeHistory = incomingHistory
     .slice(-10)
     .filter(item => item && typeof item === 'object' && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
     .map(item => ({
-      role: item.role,
+      role: item.role === 'assistant' ? 'model' : 'user',
       content: item.content.slice(0, 2000)
     }));
 
-  const messagesPayload = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    ...safeHistory,
-    { role: 'user', content: userMessage }
-  ];
+  const contents = [];
+  for (const item of safeHistory) {
+    // Gemini multi-turn conversation must begin with a user turn
+    if (contents.length === 0 && item.role === 'model') continue;
+
+    // Merge consecutive turns with the same role to maintain valid alternation
+    if (contents.length > 0 && contents[contents.length - 1].role === item.role) {
+      contents[contents.length - 1].parts[0].text += '\n' + item.content;
+    } else {
+      contents.push({
+        role: item.role,
+        parts: [{ text: item.content }]
+      });
+    }
+  }
+
+  // Add the current user turn
+  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+    contents[contents.length - 1].parts[0].text += '\n' + userMessage;
+  } else {
+    contents.push({
+      role: 'user',
+      parts: [{ text: userMessage }]
+    });
+  }
+
+  // Gemini model ID: default to gemini-2.5-flash (free-tier capable Flash model)
+  const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
 
   try {
-    // Call OpenAI API via native fetch with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
 
-    const openAiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const geminiPayload = {
+      system_instruction: {
+        parts: [{ text: SYSTEM_PROMPT }]
+      },
+      contents: contents,
+      generationConfig: {
+        temperature: 0.5,
+        maxOutputTokens: 600
+      }
+    };
+
+    const geminiResponse = await fetch(geminiEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey.trim()}`
+        'x-goog-api-key': apiKey.trim()
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messagesPayload,
-        max_tokens: 600,
-        temperature: 0.5
-      }),
+      body: JSON.stringify(geminiPayload),
       signal: controller.signal
     });
 
     clearTimeout(timeoutId);
 
-    if (!openAiResponse.ok) {
-      const errorData = await openAiResponse.json().catch(() => ({}));
-      const statusCode = openAiResponse.status;
+    if (!geminiResponse.ok) {
+      const errorData = await geminiResponse.json().catch(() => ({}));
+      const statusCode = geminiResponse.status;
+      const apiMessage = errorData.error?.message || 'Failed to generate response from Gemini API.';
 
-      if (statusCode === 401) {
+      if (statusCode === 400 && apiMessage.toLowerCase().includes('api key')) {
         return res.status(401).json({
-          error: 'The provided OpenAI API key is invalid or expired. Please check your credentials in Vercel.',
+          error: 'The provided Google Gemini API key is invalid. Please check your GEMINI_API_KEY in Vercel.',
           code: 'INVALID_API_KEY'
+        });
+      }
+
+      if (statusCode === 403) {
+        return res.status(403).json({
+          error: 'Access denied by Google Gemini API. Please verify your GEMINI_API_KEY permissions.',
+          code: 'PERMISSION_DENIED'
         });
       }
 
       if (statusCode === 429) {
         return res.status(429).json({
-          error: 'OpenAI quota or rate limit exceeded. Please check your OpenAI account billing and quota.',
-          code: 'OPENAI_QUOTA_EXCEEDED'
+          error: 'Google Gemini free-tier rate limit or quota exceeded. Please wait a moment before trying again.',
+          code: 'GEMINI_QUOTA_EXCEEDED'
         });
       }
 
       return res.status(statusCode).json({
-        error: errorData.error?.message || 'Failed to generate response from AI model.',
-        code: 'OPENAI_API_ERROR'
+        error: apiMessage,
+        code: errorData.error?.status || 'GEMINI_API_ERROR'
       });
     }
 
-    const data = await openAiResponse.json();
-    const reply = data.choices?.[0]?.message?.content?.trim();
+    const data = await geminiResponse.json();
+    const candidate = data.candidates?.[0];
+    const reply = candidate?.content?.parts?.map(p => p.text).filter(Boolean).join('\n')?.trim();
 
     if (!reply) {
+      if (candidate?.finishReason === 'SAFETY') {
+        return res.status(200).json({
+          reply: 'I apologize, but I cannot fulfill that request due to content safety guidelines. Please ask another question about our Korean Marine Collagen Peptides.',
+          model: geminiModel
+        });
+      }
+
       return res.status(502).json({
-        error: 'Received empty response from AI model. Please try again.',
+        error: 'Received empty response from Gemini AI. Please try again.',
         code: 'EMPTY_AI_RESPONSE'
       });
     }
 
     return res.status(200).json({
       reply,
-      model: data.model || 'gpt-4o-mini'
+      model: geminiModel
     });
 
   } catch (err) {
     if (err.name === 'AbortError') {
       return res.status(504).json({
-        error: 'Request timed out waiting for OpenAI response. Please try again.',
+        error: 'Request timed out waiting for Google Gemini response. Please try again.',
         code: 'GATEWAY_TIMEOUT'
       });
     }

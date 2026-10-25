@@ -3307,9 +3307,9 @@
             if (response.status === 404) {
               errorHtml = '⚠️ <strong>Serverless Endpoint Note:</strong> The <code>/api/chat</code> endpoint is active on Vercel deployments. In local static preview mode, please deploy or run via <code>vercel dev</code>.';
             } else if (data.code === 'MISSING_API_KEY') {
-              errorHtml = '⚙️ <strong>AI Backend Connected:</strong> Please configure your <code>OPENAI_API_KEY</code> in Vercel Project Settings (Settings &gt; Environment Variables) to enable live answers from <code>gpt-4o-mini</code>.';
-            } else if (data.code === 'RATE_LIMIT_EXCEEDED') {
-              errorHtml = '⏳ ' + (data.error || 'You are sending messages too quickly. Please wait a moment.');
+              errorHtml = '⚙️ <strong>AI Backend Connected:</strong> Please configure your <code>GEMINI_API_KEY</code> in Vercel Project Settings (Settings &gt; Environment Variables) to enable free live answers from Google Gemini.';
+            } else if (data.code === 'GEMINI_QUOTA_EXCEEDED' || data.code === 'RATE_LIMIT_EXCEEDED') {
+              errorHtml = '⏳ ' + (data.error || 'Gemini free-tier rate limit reached. Please wait a moment.');
             }
 
             addAIMessage(errorHtml, false, true, function() {
