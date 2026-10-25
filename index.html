@@ -1202,12 +1202,11 @@
       background: #FFFFFF;
       border-top: 1px solid var(--border-color);
       box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
-      padding: 10px 16px;
+      padding: 8px 12px;
       display: none;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      z-index: 99;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 100;
       transform: translateY(110%);
       transition: transform 0.3s ease;
     }
@@ -1215,18 +1214,60 @@
       display: flex;
       transform: translateY(0);
     }
-    .sticky-bar-info {
+    .sticky-mobile-packs {
       display: flex;
-      flex-direction: column;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      -webkit-overflow-scrolling: touch;
     }
-    .sticky-bar-title {
-      font-size: 12px;
-      font-weight: 600;
+    .sticky-mobile-packs::-webkit-scrollbar {
+      display: none;
+    }
+    .sticky-mob-pack {
+      flex: 1;
+      min-width: 0;
+      padding: 5px 4px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border-color);
+      background: #F9FAFB;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+    .sticky-mob-pack.active {
+      border-color: var(--primary);
+      background: #EAF4F2;
+      box-shadow: 0 0 0 1px var(--primary);
+    }
+    .mob-pack-name {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
       color: #111111;
+      line-height: 1.2;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 170px;
+    }
+    .sticky-mob-pack.active .mob-pack-name {
+      color: var(--primary);
+    }
+    .mob-pack-save {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--save-red);
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .sticky-mob-pack.active .mob-pack-save {
+      color: var(--primary);
+    }
+    .sticky-mobile-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
     }
     .sticky-bar-prices {
       display: flex;
@@ -1243,15 +1284,37 @@
       color: var(--text-light);
       text-decoration: line-through;
     }
+    .sticky-mobile-btns {
+      display: flex;
+      gap: 8px;
+    }
     .sticky-bar-btn {
-      padding: 12px 24px;
-      background: var(--dark-btn);
-      color: #FFFFFF;
-      font-size: 13px;
+      padding: 9px 14px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.3px;
       border-radius: 6px;
       white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-family: inherit;
+    }
+    .sticky-bar-btn.btn-cart {
+      background: var(--dark-btn);
+      color: #FFFFFF;
+      border: 1px solid var(--dark-btn);
+    }
+    .sticky-bar-btn.btn-cart:hover {
+      background: var(--dark-btn-hover);
+    }
+    .sticky-bar-btn.btn-buy {
+      background: var(--primary);
+      color: #FFFFFF;
+      border: 1px solid var(--primary);
+    }
+    .sticky-bar-btn.btn-buy:hover {
+      background: var(--primary-hover);
     }
 
     /* Prototype Notification Modal */
@@ -1747,6 +1810,12 @@
     @media (max-width: 859px) {
       .sticky-desktop-bar {
         display: none !important;
+      }
+      body.sticky-mobile-active .ai-widget-trigger {
+        bottom: 104px;
+      }
+      body.sticky-mobile-active .back-to-top-btn {
+        bottom: 104px;
       }
     }
     @media (min-width: 860px) and (max-width: 1050px) {
@@ -2478,11 +2547,11 @@
       <div class="section-eyebrow">Usage Guide</div>
       <h2 class="section-main-heading" id="howToTakeHeading">HOW TO TAKE</h2>
       <div class="collapsible-container" id="knowMoreCollapsible">
-        <button type="button" class="collapsible-head-btn" id="knowMoreToggle">
+        <button type="button" class="collapsible-head-btn" id="knowMoreToggle" aria-expanded="false" aria-controls="knowMoreBody">
           <span>Know More: Korean Marine Collagen Peptides Guide</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
         </button>
-        <div class="collapsible-body">
+        <div class="collapsible-body" id="knowMoreBody">
           <p>
             Introducing Korean Marine Collagen Powder, a premium collagen supplement derived from sustainably sourced marine fish. Each serving delivers 8g of hydrolyzed collagen, rich in Type I &amp; III peptides, known for their powerful support for skin, hair, joints, and overall vitality. Expertly hydrolyzed for enhanced absorption and gut-friendly digestion, this formula is gluten-free, non-GMO, and third-party tested for purity.
           </p>
@@ -2512,7 +2581,7 @@
       <h2 class="section-main-heading">Frequently Asked Questions</h2>
       <div class="faq-accordion-list">
         <div class="faq-accordion-item active">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="true">
             <span>When is the best time to take this collagen peptides?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2521,7 +2590,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>How does this collagen help in reducing wrinkles and fine lines?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2530,7 +2599,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>How does this Korean Marine Collagen improve skin elasticity and hydration?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2539,7 +2608,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Is this collagen peptide powder gluten-free & dairy-free?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2548,7 +2617,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Can this collagen improve hair growth and thickness?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2557,7 +2626,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Can I mix this collagen peptides into hot drinks?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2566,7 +2635,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>How long does this collagen take to work on skin?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2575,7 +2644,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Does this collagen help with nail strength?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2584,7 +2653,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Can this Marine Collagen help reduce acne scars?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2593,7 +2662,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Can vegetarians use this collagen?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2602,7 +2671,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>What is the percentage of type 1 & type 3 in Collagen?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2611,7 +2680,7 @@
           </div>
         </div>
         <div class="faq-accordion-item">
-          <button type="button" class="faq-question-btn">
+          <button type="button" class="faq-question-btn" aria-expanded="false">
             <span>Will collagen make me gain weight?</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
@@ -2620,55 +2689,6 @@
           </div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- SECTION: SPECIFICATIONS TABLE (hidden - moved to ingredients) -->
-  <!-- SECTION: SPECIFICATIONS & REGULATORY DETAILS -->
-  <section class="specs-section" style="display:none;">
-    <div class="container">
-      <div class="section-eyebrow" style="text-align: center;">Details</div>
-      <h2 class="section-main-heading" style="text-align: center;">Additional Information</h2>
-      <table class="specs-table">
-        <tbody>
-          <tr>
-            <th>Product Name</th>
-            <td>Korean Marine Collagen Peptides</td>
-          </tr>
-          <tr>
-            <th>Ingredient List</th>
-            <td>100% Pure Korean Marine Collagen Peptides</td>
-          </tr>
-          <tr>
-            <th>MRP</th>
-            <td>Rs. 1,799 / Rs. 1,999 (incl. of all taxes)</td>
-          </tr>
-          <tr>
-            <th>Barcode</th>
-            <td>8908012692201</td>
-          </tr>
-          <tr>
-            <th>Dimensions</th>
-            <td>14 x 8 x 8 cm</td>
-          </tr>
-          <tr>
-            <th>Weight / Net Quantity</th>
-            <td>200 gms (25 servings @ 8g/scoop)</td>
-          </tr>
-          <tr>
-            <th>Shelf Life</th>
-            <td>36 Months from manufacturing date</td>
-          </tr>
-          <tr>
-            <th>Marketer Details</th>
-            <td>Nutritionalab Pvt. Ltd., 2004, Phoenix Tower A, S.B. Marg, Lower Parel West, Mumbai – 400013, Maharashtra. (FSSAI Lic. No. 10019022009134)</td>
-          </tr>
-          <tr>
-            <th>Manufacturer Details</th>
-            <td>Nutritionalab Pvt. Ltd., 2004, Phoenix Tower A, S.B. Marg, Lower Parel West, Mumbai – 400013, Maharashtra. (FSSAI Lic. No. 10019022009134)</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
   </section>
 
@@ -2728,14 +2748,34 @@
 
   <!-- STICKY MOBILE BUY BAR -->
   <div class="sticky-mobile-bar" id="stickyMobileBar">
-    <div class="sticky-bar-info">
-      <div class="sticky-bar-title" id="stickyBarTitle">Pack of 1</div>
+    <div class="sticky-mobile-packs" id="stickyMobilePacks">
+      <button type="button" class="sticky-mob-pack active" data-pack-idx="0">
+        <span class="mob-pack-name">Pack 1</span>
+        <span class="mob-pack-save">Save 3%</span>
+      </button>
+      <button type="button" class="sticky-mob-pack" data-pack-idx="1">
+        <span class="mob-pack-name">Pack 2</span>
+        <span class="mob-pack-save">Save 5%</span>
+      </button>
+      <button type="button" class="sticky-mob-pack" data-pack-idx="2">
+        <span class="mob-pack-name">Pack 3</span>
+        <span class="mob-pack-save">Save 7%</span>
+      </button>
+      <button type="button" class="sticky-mob-pack" data-pack-idx="3">
+        <span class="mob-pack-name">Pack 4</span>
+        <span class="mob-pack-save">Save 10%</span>
+      </button>
+    </div>
+    <div class="sticky-mobile-actions">
       <div class="sticky-bar-prices">
         <span class="sticky-bar-price" id="stickyBarPrice">₹1,745</span>
         <span class="sticky-bar-compare" id="stickyBarCompare">₹1,799</span>
       </div>
+      <div class="sticky-mobile-btns">
+        <button type="button" class="sticky-bar-btn btn-cart" id="stickyBarAddBtn">Add to Cart</button>
+        <button type="button" class="sticky-bar-btn btn-buy" id="stickyBarBuyBtn">Buy It Now</button>
+      </div>
     </div>
-    <button type="button" class="sticky-bar-btn" id="stickyBarAddBtn">Add to Cart</button>
   </div>
 
   <!-- PROTOTYPE DEMO MODAL -->
@@ -2851,6 +2891,8 @@
       var stickyBarPrice = document.getElementById('stickyBarPrice');
       var stickyBarCompare = document.getElementById('stickyBarCompare');
       var stickyBarAddBtn = document.getElementById('stickyBarAddBtn');
+      var stickyBarBuyBtn = document.getElementById('stickyBarBuyBtn');
+      var stickyMobPacks = document.querySelectorAll('.sticky-mob-pack');
 
       var stickyDesktopBar = document.getElementById('stickyDesktopBar');
       var stickyDesktopAddBtn = document.getElementById('stickyDesktopAddBtn');
@@ -2888,9 +2930,12 @@
         syncStickyBarSelection(selectedPackIndex);
       }
 
-      // Sync sticky desktop bar pack selection
+      // Sync sticky desktop & mobile bar pack selection
       function syncStickyBarSelection(idx) {
         stickyPackOptions.forEach(function(opt, i) {
+          opt.classList.toggle('active', i === idx);
+        });
+        stickyMobPacks.forEach(function(opt, i) {
           opt.classList.toggle('active', i === idx);
         });
       }
@@ -2919,6 +2964,16 @@
 
       // Sticky Desktop Pack Selection
       stickyPackOptions.forEach(function(opt) {
+        opt.addEventListener('click', function() {
+          var idx = parseInt(opt.getAttribute('data-pack-idx'));
+          if (variantCards[idx]) {
+            variantCards[idx].click();
+          }
+        });
+      });
+
+      // Sticky Mobile Pack Selection
+      stickyMobPacks.forEach(function(opt) {
         opt.addEventListener('click', function() {
           var idx = parseInt(opt.getAttribute('data-pack-idx'));
           if (variantCards[idx]) {
@@ -2980,7 +3035,10 @@
       addToCartBtn.addEventListener('click', function() { triggerDemoModal('Added to Cart'); });
       buyNowBtn.addEventListener('click', function() { triggerDemoModal('Instant Checkout'); });
       if (stickyBarAddBtn) {
-        stickyBarAddBtn.addEventListener('click', function() { triggerDemoModal('Sticky Bar Add to Cart'); });
+        stickyBarAddBtn.addEventListener('click', function() { triggerDemoModal('Added to Cart (Sticky Bar)'); });
+      }
+      if (stickyBarBuyBtn) {
+        stickyBarBuyBtn.addEventListener('click', function() { triggerDemoModal('Instant Checkout (Sticky Bar)'); });
       }
       if (stickyDesktopAddBtn) {
         stickyDesktopAddBtn.addEventListener('click', function() { triggerDemoModal('Added to Cart (Sticky Bar)'); });
@@ -3007,8 +3065,10 @@
         if (stickyMobileBar) {
           if (isPast && window.innerWidth < 860) {
             stickyMobileBar.classList.add('visible');
+            document.body.classList.add('sticky-mobile-active');
           } else {
             stickyMobileBar.classList.remove('visible');
+            document.body.classList.remove('sticky-mobile-active');
           }
         }
 
@@ -3038,6 +3098,15 @@
                 stickyDesktopBar.classList.remove('visible');
               }
             }
+            if (stickyMobileBar) {
+              if (entry.isIntersecting) {
+                stickyMobileBar.classList.remove('visible');
+                document.body.classList.remove('sticky-mobile-active');
+              } else if (isPast && window.innerWidth < 860) {
+                stickyMobileBar.classList.add('visible');
+                document.body.classList.add('sticky-mobile-active');
+              }
+            }
           });
         }, { threshold: [0, 0.2, 1.0] });
         stickyObserver.observe(buyBoxEl);
@@ -3051,8 +3120,10 @@
         // Expand Know More accordion if target is How to Take
         if (targetId === 'howToTakeAnchor') {
           var coll = document.getElementById('knowMoreCollapsible');
+          var btn = document.getElementById('knowMoreToggle');
           if (coll && !coll.classList.contains('open')) {
             coll.classList.add('open');
+            if (btn) btn.setAttribute('aria-expanded', 'true');
           }
         }
         var header = document.querySelector('.site-header');
@@ -3192,7 +3263,8 @@
       var knowMoreBtn = document.getElementById('knowMoreToggle');
       if (knowMoreBtn && knowMoreContainer) {
         knowMoreBtn.addEventListener('click', function() {
-          knowMoreContainer.classList.toggle('open');
+          var isOpen = knowMoreContainer.classList.toggle('open');
+          knowMoreBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         });
       }
 
@@ -3203,9 +3275,14 @@
         if (btn) {
           btn.addEventListener('click', function() {
             var wasActive = item.classList.contains('active');
-            faqItems.forEach(function(i) { i.classList.remove('active'); });
+            faqItems.forEach(function(i) {
+              i.classList.remove('active');
+              var b = i.querySelector('.faq-question-btn');
+              if (b) b.setAttribute('aria-expanded', 'false');
+            });
             if (!wasActive) {
               item.classList.add('active');
+              btn.setAttribute('aria-expanded', 'true');
             }
           });
         }

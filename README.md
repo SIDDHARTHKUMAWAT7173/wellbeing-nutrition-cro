@@ -12,7 +12,7 @@ This repository contains a production-ready, high-converting frontend recreation
 The project was developed as a Product Management and Conversion Rate Optimization assignment. It identifies critical conversion bottlenecks in the original D2C e-commerce user journey and introduces data-informed CRO enhancements designed to reduce buyer friction, improve information architecture, reinforce trust, and increase Add-to-Cart / Checkout intent.
 
 * **Original Reference Product Page:** [Wellbeing Nutrition Korean Marine Collagen Peptides](https://wellbeingnutrition.com/products/korean-marine-collagen-peptides?variant=40790287614032)
-* **Live Deployment URL:** `https://your-deployment-url.vercel.app` *(Placeholder — update with your live Vercel URL upon deployment)*
+* **Live Deployment URL:** [https://wellbeing-nutrition-cro.vercel.app/](https://wellbeing-nutrition-cro.vercel.app/)
 
 ---
 
