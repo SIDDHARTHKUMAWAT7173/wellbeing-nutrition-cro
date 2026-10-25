@@ -3302,14 +3302,21 @@
           var data = await response.json().catch(function() { return {}; });
 
           if (!response.ok) {
-            var errorHtml = data.error || 'Unable to connect to AI assistant. Please try again.';
+            var errorHtml = data && data.error ? data.error : 'Unable to connect to AI assistant. Please try again.';
 
-            if (response.status === 404) {
+            // Only display local static server note if /api/chat returned a true route 404/501 (no JSON error object)
+            if ((response.status === 404 || response.status === 501) && (!data || !data.error)) {
               errorHtml = '⚠️ <strong>Serverless Endpoint Note:</strong> The <code>/api/chat</code> endpoint is active on Vercel deployments. In local static preview mode, please deploy or run via <code>vercel dev</code>.';
-            } else if (data.code === 'MISSING_API_KEY') {
+            } else if (data && data.code === 'MISSING_API_KEY') {
               errorHtml = '⚙️ <strong>AI Backend Connected:</strong> Please configure your <code>GEMINI_API_KEY</code> in Vercel Project Settings (Settings &gt; Environment Variables) to enable free live answers from Google Gemini.';
-            } else if (data.code === 'GEMINI_QUOTA_EXCEEDED' || data.code === 'RATE_LIMIT_EXCEEDED') {
+            } else if (data && (data.code === 'GEMINI_QUOTA_EXCEEDED' || data.code === 'RATE_LIMIT_EXCEEDED')) {
               errorHtml = '⏳ ' + (data.error || 'Gemini free-tier rate limit reached. Please wait a moment.');
+            } else if (data && data.code === 'INVALID_API_KEY') {
+              errorHtml = '🔑 ' + (data.error || 'Invalid Gemini API key. Please check your GEMINI_API_KEY in Vercel.');
+            } else if (data && data.code === 'MODEL_NOT_FOUND') {
+              errorHtml = '🤖 ' + (data.error || 'Gemini model not available for this API key.');
+            } else if (data && data.error) {
+              errorHtml = '⚠️ ' + escapeHtml(data.error);
             }
 
             addAIMessage(errorHtml, false, true, function() {

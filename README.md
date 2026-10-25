@@ -65,7 +65,7 @@ The project was developed as a Product Management and Conversion Rate Optimizati
 * **Mobile Sticky Bar:** Minimalist bottom bar displaying the selected pack, price, and CTA.
 
 ### 8. Real AI-Powered "Ask Wellbeing" Assistant (Google Gemini Free Tier)
-* **AI Architecture:** Upgraded from a static lookup dictionary to a real, open-ended conversational AI powered by **Google Gemini Developer API (`gemini-2.5-flash`)** via a secure serverless backend endpoint (`/api/chat`).
+* **AI Architecture:** Upgraded from a static lookup dictionary to a real, open-ended conversational AI powered by **Google Gemini Developer API (`gemini-3.8-flash`)** via a secure serverless backend endpoint (`/api/chat`).
 * **100% Free-Tier Compatible:** Connects directly to Google's generous Gemini Developer API free tier (no credit card or billing required via Google AI Studio).
 * **Accurate Product Grounding:** Grounded strictly in verified product details (pure marine collagen sourcing from Korea, 8,000mg/serving, Type 1 & 3 peptides, <1000 Daltons molecular weight, 4 pack sizes & savings, directions for use, clinical studies, third-party lab screening for heavy metals/pathogens, and dietary compatibility).
 * **Multi-Turn Context:** Retains conversational history across the user's active session, allowing natural follow-up questions (e.g. asking "How long to see results?" followed by "Can I take it with morning coffee?").
@@ -88,7 +88,7 @@ The project was developed as a Product Management and Conversion Rate Optimizati
   * Node.js runtime (>= 18.0.0) with native Web `fetch`
   * Zero heavy npm runtime dependencies
   * Built-in per-IP rate limiting and request payload sanitization
-* **AI Intelligence:** Google Gemini Developer API (`gemini-2.5-flash` Free Tier)
+* **AI Intelligence:** Google Gemini Developer API (`gemini-3.8-flash` Free Tier)
   * System prompt grounded in accurate product formulation, clinical evidence, and safety testing
   * Conversation history tracking for contextual multi-turn dialogue
 * **Typography:** Google Fonts (`Inter` & `Playfair Display`)
@@ -131,7 +131,7 @@ Automated end-to-end tests were conducted via Playwright across both Desktop and
 ## ⚠️ Known Limitations & Demo Scope
 
 1. **Client-Side Simulation:** Add to Cart, Buy It Now, and Cart Drawer actions trigger interactive prototype feedback modals rather than connecting to live Shopify payment gateways.
-2. **Live AI Environment Variable Requirement:** The serverless AI endpoint (`/api/chat`) communicates directly with the Google Gemini Developer API (`gemini-2.5-flash`). In order for live AI answers to generate on production, the project administrator must configure the `GEMINI_API_KEY` secret variable in the Vercel dashboard.
+2. **Live AI Environment Variable Requirement:** The serverless AI endpoint (`/api/chat`) communicates directly with the Google Gemini Developer API (`gemini-3.8-flash`). In order for live AI answers to generate on production, the project administrator must configure the `GEMINI_API_KEY` secret variable in the Vercel dashboard.
 
 ---
 
@@ -146,7 +146,7 @@ To activate live conversational answers using Google Gemini without incurring an
    * **Key:** `GEMINI_API_KEY`
    * **Value:** *(your Google Gemini API key)*
    * **Environments:** Check *Production*, *Preview*, and *Development*.
-5. (Optional): To override the default model, set `GEMINI_MODEL=gemini-2.5-flash`.
+5. (Optional): To override the default model, set `GEMINI_MODEL=gemini-3.8-flash`.
 6. Save the variable. The next deployment will immediately use this key to generate free live responses.
 
 *(Note: A template file `.env.example` is provided in the repository for reference. Never commit a real `.env` file or API key into version control).*

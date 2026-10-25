@@ -180,104 +180,144 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Gemini model ID: default to gemini-2.5-flash (free-tier capable Flash model)
-  const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
+  // Candidate models: default to gemini-3.8-flash, with automatic fallbacks if 404 is returned
+  const configuredModel = process.env.GEMINI_MODEL?.trim();
+  const candidateModels = configuredModel
+    ? [configuredModel]
+    : ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash'];
 
-  try {
+  const geminiPayload = {
+    system_instruction: {
+      parts: [{ text: SYSTEM_PROMPT }]
+    },
+    contents: contents,
+    generationConfig: {
+      temperature: 0.5,
+      maxOutputTokens: 600
+    }
+  };
+
+  let lastError = null;
+  let successfulReply = null;
+  let usedModel = null;
+
+  for (const model of candidateModels) {
+    const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout per attempt
 
-    const geminiPayload = {
-      system_instruction: {
-        parts: [{ text: SYSTEM_PROMPT }]
-      },
-      contents: contents,
-      generationConfig: {
-        temperature: 0.5,
-        maxOutputTokens: 600
-      }
-    };
-
-    const geminiResponse = await fetch(geminiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey.trim()
-      },
-      body: JSON.stringify(geminiPayload),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!geminiResponse.ok) {
-      const errorData = await geminiResponse.json().catch(() => ({}));
-      const statusCode = geminiResponse.status;
-      const apiMessage = errorData.error?.message || 'Failed to generate response from Gemini API.';
-
-      if (statusCode === 400 && apiMessage.toLowerCase().includes('api key')) {
-        return res.status(401).json({
-          error: 'The provided Google Gemini API key is invalid. Please check your GEMINI_API_KEY in Vercel.',
-          code: 'INVALID_API_KEY'
-        });
-      }
-
-      if (statusCode === 403) {
-        return res.status(403).json({
-          error: 'Access denied by Google Gemini API. Please verify your GEMINI_API_KEY permissions.',
-          code: 'PERMISSION_DENIED'
-        });
-      }
-
-      if (statusCode === 429) {
-        return res.status(429).json({
-          error: 'Google Gemini free-tier rate limit or quota exceeded. Please wait a moment before trying again.',
-          code: 'GEMINI_QUOTA_EXCEEDED'
-        });
-      }
-
-      return res.status(statusCode).json({
-        error: apiMessage,
-        code: errorData.error?.status || 'GEMINI_API_ERROR'
+    try {
+      const geminiResponse = await fetch(geminiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey.trim()
+        },
+        body: JSON.stringify(geminiPayload),
+        signal: controller.signal
       });
-    }
 
-    const data = await geminiResponse.json();
-    const candidate = data.candidates?.[0];
-    const reply = candidate?.content?.parts?.map(p => p.text).filter(Boolean).join('\n')?.trim();
+      clearTimeout(timeoutId);
 
-    if (!reply) {
-      if (candidate?.finishReason === 'SAFETY') {
-        return res.status(200).json({
-          reply: 'I apologize, but I cannot fulfill that request due to content safety guidelines. Please ask another question about our Korean Marine Collagen Peptides.',
-          model: geminiModel
-        });
+      if (geminiResponse.ok) {
+        const data = await geminiResponse.json();
+        const candidate = data.candidates?.[0];
+        const reply = candidate?.content?.parts?.map(p => p.text).filter(Boolean).join('\n')?.trim();
+
+        if (reply) {
+          successfulReply = reply;
+          usedModel = model;
+          break;
+        } else if (candidate?.finishReason === 'SAFETY') {
+          successfulReply = 'I apologize, but I cannot fulfill that request due to content safety guidelines. Please ask another question about our Korean Marine Collagen Peptides.';
+          usedModel = model;
+          break;
+        }
+      } else {
+        const errorData = await geminiResponse.json().catch(() => ({}));
+        const apiMessage = errorData.error?.message || 'Failed to generate response from Gemini API.';
+        lastError = {
+          status: geminiResponse.status,
+          message: apiMessage,
+          code: errorData.error?.status || 'GEMINI_API_ERROR'
+        };
+
+        // If the model was not found (404), continue to the next candidate model
+        if (geminiResponse.status === 404 && candidateModels.length > 1) {
+          console.warn(`Gemini model '${model}' returned 404 (${apiMessage}). Retrying with next model...`);
+          continue;
+        }
+
+        // For auth (400 key error, 401, 403) or rate limit (429), break immediately
+        break;
       }
-
-      return res.status(502).json({
-        error: 'Received empty response from Gemini AI. Please try again.',
-        code: 'EMPTY_AI_RESPONSE'
-      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        lastError = { status: 504, message: 'Request timed out waiting for Google Gemini response.', code: 'GATEWAY_TIMEOUT' };
+      } else {
+        lastError = { status: 500, message: err.message, code: 'NETWORK_ERROR' };
+      }
+      break;
     }
+  }
 
+  // If a response was generated, return success
+  if (successfulReply) {
     return res.status(200).json({
-      reply,
-      model: geminiModel
+      reply: successfulReply,
+      model: usedModel
     });
+  }
 
-  } catch (err) {
-    if (err.name === 'AbortError') {
+  // Handle mapped error responses — ALWAYS return 502/401/429, NEVER return 404 from /api/chat!
+  if (lastError) {
+    const statusCode = lastError.status;
+    const apiMessage = lastError.message;
+
+    if (statusCode === 400 && apiMessage.toLowerCase().includes('api key')) {
+      return res.status(401).json({
+        error: 'The provided Google Gemini API key is invalid. Please check your GEMINI_API_KEY in Vercel.',
+        code: 'INVALID_API_KEY'
+      });
+    }
+
+    if (statusCode === 401 || statusCode === 403) {
+      return res.status(403).json({
+        error: 'Access denied by Google Gemini API. Please verify your GEMINI_API_KEY permissions.',
+        code: 'PERMISSION_DENIED'
+      });
+    }
+
+    if (statusCode === 429) {
+      return res.status(429).json({
+        error: 'Google Gemini free-tier rate limit or quota exceeded. Please wait a moment before trying again.',
+        code: 'GEMINI_QUOTA_EXCEEDED'
+      });
+    }
+
+    if (statusCode === 404) {
+      return res.status(502).json({
+        error: `Gemini model was not found: ${apiMessage}`,
+        code: 'MODEL_NOT_FOUND'
+      });
+    }
+
+    if (statusCode === 504) {
       return res.status(504).json({
         error: 'Request timed out waiting for Google Gemini response. Please try again.',
         code: 'GATEWAY_TIMEOUT'
       });
     }
 
-    console.error('API /api/chat error:', err);
-    return res.status(500).json({
-      error: 'An internal server error occurred while processing your request.',
-      details: err.message
+    return res.status(502).json({
+      error: apiMessage,
+      code: lastError.code || 'GEMINI_API_ERROR'
     });
   }
+
+  return res.status(502).json({
+    error: 'Received empty response from Gemini AI. Please try again.',
+    code: 'EMPTY_AI_RESPONSE'
+  });
 };
