@@ -180,30 +180,32 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Candidate models: default to gemini-3.8-flash, with automatic fallbacks if 404 is returned
+  // Candidate models: prefer fast, low-latency models on free tier, with automatic fallback
   const configuredModel = process.env.GEMINI_MODEL?.trim();
   const candidateModels = configuredModel
     ? [configuredModel]
-    : ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash'];
+    : ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.0-flash'];
 
   let lastError = null;
   let successfulReply = null;
   let usedModel = null;
 
   for (const model of candidateModels) {
-    const isGemini3 = model.startsWith('gemini-3') || model.startsWith('gemini-4');
-    const isGemini25 = model.startsWith('gemini-2.5');
+    let thinkingConfig = null;
+    if (model.startsWith('gemini-3.8') || model.startsWith('gemini-4')) {
+      thinkingConfig = { thinkingLevel: 'low' };
+    } else if (model.startsWith('gemini-3')) {
+      thinkingConfig = { thinkingLevel: 'minimal' };
+    } else if (model.startsWith('gemini-2.5')) {
+      thinkingConfig = { thinkingBudget: 0 };
+    }
 
     const generationConfig = {
       temperature: 0.5,
       maxOutputTokens: 600
     };
-
-    // Configure thinking: low for Gemini 3/4 to minimize latency; 0 for Gemini 2.5; omitted for 2.0
-    if (isGemini3) {
-      generationConfig.thinkingConfig = { thinkingLevel: 'low' };
-    } else if (isGemini25) {
-      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    if (thinkingConfig) {
+      generationConfig.thinkingConfig = thinkingConfig;
     }
 
     const geminiPayload = {
@@ -216,7 +218,7 @@ module.exports = async function handler(req, res) {
 
     const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout per attempt
+    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout per candidate to allow fallback within Vercel limits
 
     try {
       const geminiResponse = await fetch(geminiEndpoint, {
@@ -261,21 +263,28 @@ module.exports = async function handler(req, res) {
           code: errorData.error?.status || 'GEMINI_API_ERROR'
         };
 
-        // If the model was not found (404), continue to the next candidate model
-        if (geminiResponse.status === 404 && candidateModels.length > 1) {
-          console.warn(`Gemini model '${model}' returned 404 (${apiMessage}). Retrying with next model...`);
+        // If the model was not found (404), temporarily high demand/unavailable (503), rate-limited (429), or server error (500/502/504),
+        // try the next candidate model in the list
+        const canRetryWithNextModel = [404, 429, 500, 502, 503, 504].includes(geminiResponse.status);
+        if (canRetryWithNextModel && candidateModels.length > 1) {
+          console.warn(`Gemini model '${model}' returned ${geminiResponse.status} (${apiMessage}). Retrying with next model...`);
           continue;
         }
 
-        // For auth (400 key error, 401, 403) or rate limit (429), break immediately
+        // For fatal auth errors (400 key error, 401, 403), stop immediately
         break;
       }
     } catch (err) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
-        lastError = { status: 504, message: 'Request timed out waiting for Google Gemini response.', code: 'GATEWAY_TIMEOUT' };
+        lastError = { status: 504, message: `Request to ${model} timed out.`, code: 'GATEWAY_TIMEOUT' };
       } else {
         lastError = { status: 500, message: err.message, code: 'NETWORK_ERROR' };
+      }
+      // If one candidate model timed out or encountered network error, try the next candidate model
+      if (candidateModels.length > 1) {
+        console.warn(`Gemini model '${model}' attempt failed (${err.message}). Retrying with next candidate model...`);
+        continue;
       }
       break;
     }
