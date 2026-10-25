@@ -186,25 +186,37 @@ module.exports = async function handler(req, res) {
     ? [configuredModel]
     : ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash'];
 
-  const geminiPayload = {
-    system_instruction: {
-      parts: [{ text: SYSTEM_PROMPT }]
-    },
-    contents: contents,
-    generationConfig: {
-      temperature: 0.5,
-      maxOutputTokens: 600
-    }
-  };
-
   let lastError = null;
   let successfulReply = null;
   let usedModel = null;
 
   for (const model of candidateModels) {
+    const isGemini3 = model.startsWith('gemini-3') || model.startsWith('gemini-4');
+    const isGemini25 = model.startsWith('gemini-2.5');
+
+    const generationConfig = {
+      temperature: 0.5,
+      maxOutputTokens: 600
+    };
+
+    // Configure thinking: low for Gemini 3/4 to minimize latency; 0 for Gemini 2.5; omitted for 2.0
+    if (isGemini3) {
+      generationConfig.thinkingConfig = { thinkingLevel: 'low' };
+    } else if (isGemini25) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
+    const geminiPayload = {
+      system_instruction: {
+        parts: [{ text: SYSTEM_PROMPT }]
+      },
+      contents: contents,
+      generationConfig: generationConfig
+    };
+
     const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout per attempt
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout per attempt
 
     try {
       const geminiResponse = await fetch(geminiEndpoint, {
@@ -222,7 +234,14 @@ module.exports = async function handler(req, res) {
       if (geminiResponse.ok) {
         const data = await geminiResponse.json();
         const candidate = data.candidates?.[0];
-        const reply = candidate?.content?.parts?.map(p => p.text).filter(Boolean).join('\n')?.trim();
+        const contentParts = candidate?.content?.parts || [];
+        // Filter out thinking parts to only return final user-facing text
+        const answerParts = contentParts.filter(p => !p.thought && p.text);
+        const reply = (answerParts.length > 0 ? answerParts : contentParts)
+          .map(p => p.text)
+          .filter(Boolean)
+          .join('\n')
+          ?.trim();
 
         if (reply) {
           successfulReply = reply;
