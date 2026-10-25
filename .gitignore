@@ -5,6 +5,12 @@ desktop.ini
 .vscode/
 .idea/
 
+# Environment Variables & Secrets
+.env
+.env*.local
+.env.production
+.env.development
+
 # Local Timestamped Backups
 *-backup*.html
 *.backup*

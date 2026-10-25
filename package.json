@@ -1,0 +1,9 @@
+{
+  "name": "wellbeing-nutrition-cro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CRO Product Page with AI Product Assistant for Wellbeing Nutrition Korean Marine Collagen Peptides",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

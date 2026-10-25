@@ -1599,6 +1599,43 @@
       align-self: flex-end;
       border-bottom-right-radius: 4px;
     }
+    .ai-msg.error {
+      background: #FEF2F2;
+      color: #991B1B;
+      border: 1px solid #FECACA;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .ai-msg.error code {
+      background: rgba(0,0,0,0.06);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-family: monospace;
+    }
+    .ai-retry-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      padding: 5px 12px;
+      background: #DC2626;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .ai-retry-btn:hover {
+      background: #B91C1C;
+    }
+    .ai-retry-btn svg {
+      width: 12px;
+      height: 12px;
+    }
     .ai-msg.typing {
       background: #F3F4F6;
       align-self: flex-start;
@@ -1690,9 +1727,15 @@
     .ai-send-btn:hover {
       background: var(--primary-hover);
     }
-    .ai-send-btn svg {
-      width: 16px;
-      height: 16px;
+    .ai-chat-input:disabled {
+      background: #F3F4F6;
+      color: #9CA3AF;
+      cursor: not-allowed;
+    }
+    .ai-send-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      pointer-events: none;
     }
 
     @media (max-width: 480px) {
@@ -3141,83 +3184,180 @@
       var aiSendBtn = document.getElementById('aiSendBtn');
       var aiSuggestions = document.getElementById('aiSuggestions');
 
-      var aiResponses = {
-        'what is the recommended daily serving': 'The recommended daily serving is one scoop (8g) of Korean Marine Collagen Peptides. Mix it into any beverage — hot or cold — once daily. Each jar contains 25 servings.',
-        'which collagen types are present': 'This product contains Type 1 and Type 3 hydrolyzed marine collagen peptides. Type 1 (90%) supports skin firmness and hydration, while Type 3 (10%) maintains connective tissue elasticity.',
-        'how should i take this product': 'Mix one scoop (8g) into your coffee, smoothie, tea, or even soup. It dissolves easily without altering the taste. For best results, take it consistently for 8-12 weeks. Pairing with Vitamin C enhances absorption.',
-        'how do i choose the right pack': 'Pack of 1 (₹1,745) is great to try. Pack of 2 (₹3,418, 5% off) suits a 2-month routine. Pack of 3 (₹5,019, 7% off) gives best value for the recommended 12-week cycle. Pack of 4 (₹6,476, 10% off) offers maximum savings for long-term use.',
-        'is this gluten free': 'Yes, this marine collagen is naturally gluten-free and dairy-free, making it suitable for people with dietary sensitivities.',
-        'how long to see results': 'Most users notice visible improvements in skin hydration and texture within 4-8 weeks of consistent daily use. Full benefits typically appear after 12 weeks.',
-        'is this vegetarian': 'No, marine collagen is sourced from deep-sea fish and is not suitable for vegetarians or vegans. However, it is 100% pescatarian-friendly.',
-        'what is the molecular weight': 'The collagen peptides have an ultra-low molecular weight of less than 1000 Daltons, which ensures rapid bio-absorption — up to 1.5x faster than bovine or porcine collagen.'
-      };
+      // Conversation history buffer for multi-turn AI context
+      var aiChatHistory = [];
+      var isWaitingForAI = false;
 
-      function getAIResponse(question) {
-        var q = question.toLowerCase().replace(/[?!.,]/g, '').trim();
-        for (var key in aiResponses) {
-          if (q.indexOf(key) !== -1 || key.indexOf(q) !== -1) {
-            return aiResponses[key];
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function safeFormatMarkdown(text) {
+        var escaped = escapeHtml(text);
+        // Format bold: **text** -> <strong>text</strong>
+        escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // Format code/highlights: `text` -> <code>text</code>
+        escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // Format bullet points starting with - or *
+        var lines = escaped.split('\n');
+        var formattedLines = [];
+        var inList = false;
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (line.match(/^[-*•]\s+/)) {
+            if (!inList) {
+              formattedLines.push('<ul style="margin:6px 0;padding-left:18px;">');
+              inList = true;
+            }
+            formattedLines.push('<li>' + line.replace(/^[-*•]\s+/, '') + '</li>');
+          } else {
+            if (inList) {
+              formattedLines.push('</ul>');
+              inList = false;
+            }
+            if (line.length > 0) {
+              formattedLines.push(line);
+            } else {
+              formattedLines.push('<br>');
+            }
           }
         }
-        if (q.indexOf('serving') !== -1 || q.indexOf('dose') !== -1 || q.indexOf('scoop') !== -1)
-          return aiResponses['what is the recommended daily serving'];
-        if (q.indexOf('type') !== -1 || q.indexOf('collagen type') !== -1)
-          return aiResponses['which collagen types are present'];
-        if (q.indexOf('take') !== -1 || q.indexOf('use') !== -1 || q.indexOf('mix') !== -1)
-          return aiResponses['how should i take this product'];
-        if (q.indexOf('pack') !== -1 || q.indexOf('choose') !== -1 || q.indexOf('which') !== -1)
-          return aiResponses['how do i choose the right pack'];
-        if (q.indexOf('gluten') !== -1 || q.indexOf('dairy') !== -1)
-          return aiResponses['is this gluten free'];
-        if (q.indexOf('result') !== -1 || q.indexOf('long') !== -1 || q.indexOf('work') !== -1)
-          return aiResponses['how long to see results'];
-        if (q.indexOf('vegetarian') !== -1 || q.indexOf('vegan') !== -1)
-          return aiResponses['is this vegetarian'];
-        if (q.indexOf('molecular') !== -1 || q.indexOf('dalton') !== -1 || q.indexOf('weight') !== -1 || q.indexOf('absorb') !== -1)
-          return aiResponses['what is the molecular weight'];
-        if (q.indexOf('price') !== -1 || q.indexOf('cost') !== -1)
-          return 'Pack of 1: ₹1,745 (Save 3%), Pack of 2: ₹3,418 (Save 5%), Pack of 3: ₹5,019 (Save 7%), Pack of 4: ₹6,476 (Save 10%). All prices are MRP inclusive of taxes.';
-        if (q.indexOf('ingredient') !== -1)
-          return 'The sole ingredient is 100% Pure Korean Marine Collagen Peptides — no fillers, sugars, preservatives, or artificial flavors.';
-        return 'I\'m a demo assistant with limited knowledge about this product. For detailed queries, please contact Wellbeing Nutrition customer support. I can help with serving size, collagen types, how to take it, pricing, and pack selection!';
+        if (inList) {
+          formattedLines.push('</ul>');
+        }
+
+        return formattedLines.join('<br>').replace(/(<br>)+/g, '<br>');
       }
 
-      function addAIMessage(text, isUser) {
+      function setAIChatBusy(busy) {
+        isWaitingForAI = busy;
+        if (aiInput) aiInput.disabled = busy;
+        if (aiSendBtn) aiSendBtn.disabled = busy;
+      }
+
+      function addAIMessage(content, isUser, isError, onRetry) {
         var msg = document.createElement('div');
-        msg.className = 'ai-msg ' + (isUser ? 'user' : 'bot');
-        msg.textContent = text;
+        msg.className = 'ai-msg ' + (isUser ? 'user' : (isError ? 'error' : 'bot'));
+
+        if (isUser) {
+          msg.textContent = content;
+        } else if (isError) {
+          msg.innerHTML = content.indexOf('<') !== -1 ? content : safeFormatMarkdown(content);
+          if (onRetry) {
+            var retryContainer = document.createElement('div');
+            var retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.className = 'ai-retry-btn';
+            retryBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg> Try Again';
+            retryBtn.addEventListener('click', function() {
+              msg.remove();
+              onRetry();
+            });
+            retryContainer.appendChild(retryBtn);
+            msg.appendChild(retryContainer);
+          }
+        } else {
+          msg.innerHTML = safeFormatMarkdown(content);
+        }
+
         aiBody.appendChild(msg);
         aiBody.scrollTop = aiBody.scrollHeight;
+        return msg;
       }
 
-      function showTypingThenRespond(question) {
+      async function sendQuestionToAI(question) {
+        if (!question || isWaitingForAI) return;
+
+        // Show typing indicator
         var typing = document.createElement('div');
         typing.className = 'ai-msg typing';
         typing.innerHTML = '<div class="ai-typing-dots"><span></span><span></span><span></span></div>';
         aiBody.appendChild(typing);
         aiBody.scrollTop = aiBody.scrollHeight;
 
-        setTimeout(function() {
+        setAIChatBusy(true);
+
+        try {
+          var response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: question,
+              history: aiChatHistory
+            })
+          });
+
           if (typing.parentNode === aiBody) {
             aiBody.removeChild(typing);
           }
-          addAIMessage(getAIResponse(question), false);
-        }, 600 + Math.random() * 300);
+
+          var data = await response.json().catch(function() { return {}; });
+
+          if (!response.ok) {
+            var errorHtml = data.error || 'Unable to connect to AI assistant. Please try again.';
+
+            if (response.status === 404) {
+              errorHtml = '⚠️ <strong>Serverless Endpoint Note:</strong> The <code>/api/chat</code> endpoint is active on Vercel deployments. In local static preview mode, please deploy or run via <code>vercel dev</code>.';
+            } else if (data.code === 'MISSING_API_KEY') {
+              errorHtml = '⚙️ <strong>AI Backend Connected:</strong> Please configure your <code>OPENAI_API_KEY</code> in Vercel Project Settings (Settings &gt; Environment Variables) to enable live answers from <code>gpt-4o-mini</code>.';
+            } else if (data.code === 'RATE_LIMIT_EXCEEDED') {
+              errorHtml = '⏳ ' + (data.error || 'You are sending messages too quickly. Please wait a moment.');
+            }
+
+            addAIMessage(errorHtml, false, true, function() {
+              sendQuestionToAI(question);
+            });
+            return;
+          }
+
+          var reply = data.reply;
+          if (reply) {
+            addAIMessage(reply, false, false);
+            // Append to session memory
+            aiChatHistory.push({ role: 'user', content: question });
+            aiChatHistory.push({ role: 'assistant', content: reply });
+          } else {
+            addAIMessage('No response received from the assistant. Please try again.', false, true, function() {
+              sendQuestionToAI(question);
+            });
+          }
+
+        } catch (err) {
+          if (typing.parentNode === aiBody) {
+            aiBody.removeChild(typing);
+          }
+          addAIMessage('Network error connecting to the AI assistant. Please check your internet connection and try again.', false, true, function() {
+            sendQuestionToAI(question);
+          });
+        } finally {
+          setAIChatBusy(false);
+          if (aiInput) {
+            aiInput.focus();
+          }
+        }
       }
 
       function handleAISend() {
         var text = aiInput.value.trim();
-        if (!text) return;
+        if (!text || isWaitingForAI) return;
         addAIMessage(text, true);
         aiInput.value = '';
-        showTypingThenRespond(text);
+        sendQuestionToAI(text);
       }
 
       if (aiTrigger && aiPanel) {
         aiTrigger.addEventListener('click', function() {
           aiPanel.classList.add('open');
           aiTrigger.style.display = 'none';
-          aiInput.focus();
+          if (aiInput) aiInput.focus();
         });
         aiClose.addEventListener('click', function() {
           aiPanel.classList.remove('open');
@@ -3227,13 +3367,16 @@
         aiInput.addEventListener('keydown', function(e) {
           if (e.key === 'Enter') handleAISend();
         });
-        aiSuggestions.addEventListener('click', function(e) {
-          var btn = e.target.closest('.ai-suggestion-btn');
-          if (!btn) return;
-          var q = btn.textContent;
-          addAIMessage(q, true);
-          showTypingThenRespond(q);
-        });
+        if (aiSuggestions) {
+          aiSuggestions.addEventListener('click', function(e) {
+            if (isWaitingForAI) return;
+            var btn = e.target.closest('.ai-suggestion-btn');
+            if (!btn) return;
+            var q = btn.textContent.trim();
+            addAIMessage(q, true);
+            sendQuestionToAI(q);
+          });
+        }
       }
 
       // Lab Reports Tabs

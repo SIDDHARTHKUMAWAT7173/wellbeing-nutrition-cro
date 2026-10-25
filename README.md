@@ -64,21 +64,32 @@ The project was developed as a Product Management and Conversion Rate Optimizati
 * **Desktop Sticky Bar:** Slides up from the bottom when scrolling past the main buy box, offering instant pack switching and direct Add to Cart / Buy It Now triggers.
 * **Mobile Sticky Bar:** Minimalist bottom bar displaying the selected pack, price, and CTA.
 
-### 8. Interactive "Ask Wellbeing" Product Assistant
-* Floating conversational assistant on the bottom-left providing instant answers on serving size, molecular weight (<1000 Daltons), collagen types (Type 1 & 3), and diet compatibility.
+### 8. Real AI-Powered "Ask Wellbeing" Assistant
+* **AI Architecture:** Upgraded from a static lookup dictionary to a real, open-ended conversational AI powered by **OpenAI `gpt-4o-mini`** via a secure serverless backend endpoint (`/api/chat`).
+* **Accurate Product Grounding:** Grounded strictly in verified product details (pure marine collagen sourcing from Korea, 8,000mg/serving, Type 1 & 3 peptides, <1000 Daltons molecular weight, 4 pack sizes & savings, directions for use, clinical studies, third-party lab screening for heavy metals/pathogens, and dietary compatibility).
+* **Multi-Turn Context:** Retains conversational history across the user's active session, allowing natural follow-up questions (e.g. asking "How long to see results?" followed by "Can I take it with morning coffee?").
+* **Safe Rendering & Error Recovery:** Formats responses cleanly with bold text and bullet lists while preventing XSS risks. Includes automatic error detection (e.g. missing API key, rate limits) and a single-click "Try Again" retry action.
+* **Security & Credential Protection:** The OpenAI API key is read exclusively from the server-side `OPENAI_API_KEY` environment variable in Vercel. No keys or credentials are ever exposed in client-side code, HTML, or Git commits.
 
 ---
 
 ## 🛠️ Technology Stack
 
-* **Markup:** Semantic HTML5 (`index.html`)
+* **Frontend Markup:** Semantic HTML5 (`index.html`)
 * **Styling:** Modern Vanilla CSS3
   * CSS Custom Properties (Theme tokens for primary teal, neutrals, alerts)
   * CSS Grid & Flexbox layouts
   * Responsive media queries (Desktop, Tablet, Mobile)
-* **Scripting:** Modern Vanilla JavaScript (ES6+ IIFE)
+* **Client Scripting:** Modern Vanilla JavaScript (ES6+ IIFE)
   * Zero external JavaScript framework dependencies
   * Ultra-fast load times and zero hydration delays
+* **Backend / Serverless:** Vercel Serverless Functions (`/api/chat.js`)
+  * Node.js runtime (>= 18.0.0) with native Web `fetch`
+  * Zero heavy npm runtime dependencies
+  * Built-in per-IP rate limiting and request payload sanitization
+* **AI Intelligence:** OpenAI `gpt-4o-mini`
+  * System prompt grounded in accurate product formulation, clinical evidence, and safety testing
+  * Conversation history tracking for contextual multi-turn dialogue
 * **Typography:** Google Fonts (`Inter` & `Playfair Display`)
 * **Asset Optimization:** WebP & JPG compressed image assets housed locally in `/images`
 
@@ -116,16 +127,33 @@ Automated end-to-end tests were conducted via Playwright across both Desktop and
 
 ---
 
-## ⚠️ Known Limitations
+## ⚠️ Known Limitations & Demo Scope
 
 1. **Client-Side Simulation:** Add to Cart, Buy It Now, and Cart Drawer actions trigger interactive prototype feedback modals rather than connecting to live Shopify payment gateways.
-2. **Local AI Knowledge Base:** The "Ask Wellbeing" assistant operates from an embedded local knowledge dictionary tailored to this product's FAQs and nutritional facts rather than making live external API calls.
+2. **Live AI Environment Variable Requirement:** The serverless AI endpoint (`/api/chat`) communicates directly with the official OpenAI API (`gpt-4o-mini`). In order for live AI answers to generate on production, the project administrator must configure the `OPENAI_API_KEY` secret variable in the Vercel dashboard.
+
+---
+
+## 🔑 AI Chatbot Setup & Environment Variables
+
+To activate live conversational answers from OpenAI in your Vercel deployment:
+
+1. Obtain an API key from [OpenAI Platform](https://platform.openai.com/api-keys).
+2. Go to your project dashboard on [Vercel](https://vercel.com).
+3. Navigate to **Settings > Environment Variables**.
+4. Create a new variable:
+   * **Key:** `OPENAI_API_KEY`
+   * **Value:** `sk-...` (your secret OpenAI key)
+   * **Environments:** Check *Production*, *Preview*, and *Development*.
+5. Save the variable. The next deployment will immediately use this key to generate live responses.
+
+*(Note: A template file `.env.example` is provided in the repository for reference. Never commit a real `.env` file or API key into version control).*
 
 ---
 
 ## 🌐 Deployment to Vercel
 
-The project is structured as a zero-config static site ready for immediate Vercel deployment:
+The project is structured as a zero-config repository ready for automatic Vercel deployment:
 
 ### Option A: Deploy via GitHub (Recommended)
 1. Push this repository to your GitHub account (see instructions below).
@@ -136,12 +164,14 @@ The project is structured as a zero-config static site ready for immediate Verce
    * **Root Directory:** `./`
    * **Build Command:** *(None)*
    * **Output Directory:** *(None / root)*
-5. Click **Deploy**. Vercel will build and assign a live production URL in seconds.
+5. Under **Environment Variables**, add `OPENAI_API_KEY` with your OpenAI key.
+6. Click **Deploy**. Vercel will build and assign a live production URL in seconds.
 
 ### Option B: Deploy via Vercel CLI
 ```bash
 npm install -g vercel
 vercel login
+vercel env add OPENAI_API_KEY
 vercel --prod
 ```
 
