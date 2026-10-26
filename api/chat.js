@@ -180,13 +180,38 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Candidate models: prefer fast, low-latency models on free tier, with automatic fallback
-  const configuredModel = process.env.GEMINI_MODEL?.trim();
-  const candidateModels = configuredModel
-    ? [configuredModel]
-    : ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.0-flash'];
+  // Verified, active models on Google Gemini Developer API (Free Tier)
+  // Ordered from fastest/lowest-latency to flagship fallbacks
+  const SUPPORTED_MODELS = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.1-flash-lite'
+  ];
 
-  let lastError = null;
+  const DEPRECATED_MODELS = [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-001',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-flash-lite-001',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ];
+
+  const configuredModel = process.env.GEMINI_MODEL?.trim();
+  let candidateModels = [...SUPPORTED_MODELS];
+
+  if (configuredModel) {
+    if (DEPRECATED_MODELS.includes(configuredModel)) {
+      console.warn(`GEMINI_MODEL is set to retired/deprecated model '${configuredModel}'. Ignoring and using supported models:`, SUPPORTED_MODELS);
+    } else {
+      // Put user-specified model first, followed by verified supported models as fallbacks
+      candidateModels = [configuredModel, ...SUPPORTED_MODELS.filter(m => m !== configuredModel)];
+    }
+  }
+
+  const attemptedErrors = [];
   let successfulReply = null;
   let usedModel = null;
 
@@ -196,8 +221,6 @@ module.exports = async function handler(req, res) {
       thinkingConfig = { thinkingLevel: 'low' };
     } else if (model.startsWith('gemini-3')) {
       thinkingConfig = { thinkingLevel: 'minimal' };
-    } else if (model.startsWith('gemini-2.5')) {
-      thinkingConfig = { thinkingBudget: 0 };
     }
 
     const generationConfig = {
@@ -218,7 +241,7 @@ module.exports = async function handler(req, res) {
 
     const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout per candidate to allow fallback within Vercel limits
+    const timeoutId = setTimeout(() => controller.abort(), 9000); // 9s timeout per candidate to allow fallbacks within Vercel's limit
 
     try {
       const geminiResponse = await fetch(geminiEndpoint, {
@@ -257,36 +280,37 @@ module.exports = async function handler(req, res) {
       } else {
         const errorData = await geminiResponse.json().catch(() => ({}));
         const apiMessage = errorData.error?.message || 'Failed to generate response from Gemini API.';
-        lastError = {
+        attemptedErrors.push({
+          model: model,
           status: geminiResponse.status,
           message: apiMessage,
           code: errorData.error?.status || 'GEMINI_API_ERROR'
-        };
+        });
 
-        // If the model was not found (404), temporarily high demand/unavailable (503), rate-limited (429), or server error (500/502/504),
-        // try the next candidate model in the list
-        const canRetryWithNextModel = [404, 429, 500, 502, 503, 504].includes(geminiResponse.status);
-        if (canRetryWithNextModel && candidateModels.length > 1) {
-          console.warn(`Gemini model '${model}' returned ${geminiResponse.status} (${apiMessage}). Retrying with next model...`);
-          continue;
+        // Fatal API key errors (invalid key, permission denied) — abort immediately as key is invalid for all models
+        if ((geminiResponse.status === 400 && apiMessage.toLowerCase().includes('api key')) ||
+            geminiResponse.status === 401 ||
+            geminiResponse.status === 403) {
+          break;
         }
 
-        // For fatal auth errors (400 key error, 401, 403), stop immediately
-        break;
+        // For recoverable errors (404 Not Found, 429 Quota/Rate Limit, 503 Unavailable, 500 Server Error),
+        // try the next candidate model
+        console.warn(`Gemini model '${model}' returned ${geminiResponse.status} (${apiMessage}). Retrying with next model...`);
+        continue;
       }
     } catch (err) {
       clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        lastError = { status: 504, message: `Request to ${model} timed out.`, code: 'GATEWAY_TIMEOUT' };
-      } else {
-        lastError = { status: 500, message: err.message, code: 'NETWORK_ERROR' };
-      }
-      // If one candidate model timed out or encountered network error, try the next candidate model
-      if (candidateModels.length > 1) {
-        console.warn(`Gemini model '${model}' attempt failed (${err.message}). Retrying with next candidate model...`);
-        continue;
-      }
-      break;
+      const isTimeout = err.name === 'AbortError';
+      attemptedErrors.push({
+        model: model,
+        status: isTimeout ? 504 : 500,
+        message: isTimeout ? `Request to model '${model}' timed out.` : err.message,
+        code: isTimeout ? 'GATEWAY_TIMEOUT' : 'NETWORK_ERROR'
+      });
+
+      console.warn(`Gemini model '${model}' attempt failed (${err.message}). Retrying with next candidate model...`);
+      continue;
     }
   }
 
@@ -298,49 +322,69 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Handle mapped error responses — ALWAYS return 502/401/429, NEVER return 404 from /api/chat!
-  if (lastError) {
-    const statusCode = lastError.status;
-    const apiMessage = lastError.message;
-
-    if (statusCode === 400 && apiMessage.toLowerCase().includes('api key')) {
-      return res.status(401).json({
-        error: 'The provided Google Gemini API key is invalid. Please check your GEMINI_API_KEY in Vercel.',
-        code: 'INVALID_API_KEY'
-      });
-    }
-
-    if (statusCode === 401 || statusCode === 403) {
+  // Handle mapped error responses — ALWAYS return 502/401/429/504, NEVER return 404 from /api/chat!
+  if (attemptedErrors.length > 0) {
+    // 1. Check for API key / authentication errors first
+    const authError = attemptedErrors.find(e =>
+      (e.status === 400 && e.message.toLowerCase().includes('api key')) ||
+      e.status === 401 ||
+      e.status === 403
+    );
+    if (authError) {
+      if (authError.status === 400 || authError.status === 401) {
+        return res.status(401).json({
+          error: 'The provided Google Gemini API key is invalid. Please check your GEMINI_API_KEY in Vercel.',
+          code: 'INVALID_API_KEY'
+        });
+      }
       return res.status(403).json({
         error: 'Access denied by Google Gemini API. Please verify your GEMINI_API_KEY permissions.',
         code: 'PERMISSION_DENIED'
       });
     }
 
-    if (statusCode === 429) {
+    // 2. Check for 429 Rate Limit / Quota Exceeded across attempts
+    const quotaError = attemptedErrors.find(e => e.status === 429);
+    if (quotaError) {
       return res.status(429).json({
-        error: 'Google Gemini free-tier rate limit or quota exceeded. Please wait a moment before trying again.',
+        error: 'Google Gemini free-tier rate limit or quota exceeded across available models. Please wait a moment before trying again.',
         code: 'GEMINI_QUOTA_EXCEEDED'
       });
     }
 
-    if (statusCode === 404) {
+    // 3. Check for 503 Service Unavailable / High Demand
+    const unavailableError = attemptedErrors.find(e => e.status === 503);
+    if (unavailableError) {
       return res.status(502).json({
-        error: `Gemini model was not found: ${apiMessage}`,
-        code: 'MODEL_NOT_FOUND'
+        error: 'Google Gemini is currently experiencing temporary high demand. Please try again in a moment.',
+        code: 'GEMINI_UNAVAILABLE'
       });
     }
 
-    if (statusCode === 504) {
+    // 4. Check for Timeouts (504)
+    const timeoutError = attemptedErrors.find(e => e.status === 504);
+    if (timeoutError && attemptedErrors.every(e => e.status === 504 || e.status === 503)) {
       return res.status(504).json({
         error: 'Request timed out waiting for Google Gemini response. Please try again.',
         code: 'GATEWAY_TIMEOUT'
       });
     }
 
+    // 5. If all attempted models returned 404 Not Found
+    const all404 = attemptedErrors.every(e => e.status === 404);
+    if (all404) {
+      const attemptedNames = attemptedErrors.map(e => e.model).join(', ');
+      return res.status(502).json({
+        error: `None of the configured Gemini models (${attemptedNames}) were available for this API key.`,
+        code: 'MODEL_NOT_FOUND'
+      });
+    }
+
+    // 6. Generic fallback with the last attempted error
+    const lastErr = attemptedErrors[attemptedErrors.length - 1];
     return res.status(502).json({
-      error: apiMessage,
-      code: lastError.code || 'GEMINI_API_ERROR'
+      error: lastErr.message || 'Failed to generate response from Gemini API.',
+      code: lastErr.code || 'GEMINI_API_ERROR'
     });
   }
 

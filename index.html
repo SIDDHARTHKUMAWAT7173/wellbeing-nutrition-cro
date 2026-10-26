@@ -3304,8 +3304,10 @@
           if (!response.ok) {
             var errorHtml = data && data.error ? data.error : 'Unable to connect to AI assistant. Please try again.';
 
-            // Only display local static server note if /api/chat returned a true route 404/501 (no JSON error object)
-            if ((response.status === 404 || response.status === 501) && (!data || !data.error)) {
+            var isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:';
+
+            // Only display local static server note if running locally and /api/chat returned a true route 404/501 (no JSON error object)
+            if ((response.status === 404 || response.status === 501) && isLocalhost && (!data || !data.error)) {
               errorHtml = '⚠️ <strong>Serverless Endpoint Note:</strong> The <code>/api/chat</code> endpoint is active on Vercel deployments. In local static preview mode, please deploy or run via <code>vercel dev</code>.';
             } else if (data && data.code === 'MISSING_API_KEY') {
               errorHtml = '⚙️ <strong>AI Backend Connected:</strong> Please configure your <code>GEMINI_API_KEY</code> in Vercel Project Settings (Settings &gt; Environment Variables) to enable free live answers from Google Gemini.';
@@ -3315,8 +3317,12 @@
               errorHtml = '🔑 ' + (data.error || 'Invalid Gemini API key. Please check your GEMINI_API_KEY in Vercel.');
             } else if (data && data.code === 'MODEL_NOT_FOUND') {
               errorHtml = '🤖 ' + (data.error || 'Gemini model not available for this API key.');
+            } else if (data && data.code === 'GEMINI_UNAVAILABLE') {
+              errorHtml = '⏳ ' + (data.error || 'Google Gemini is experiencing temporary high demand. Please try again in a moment.');
             } else if (data && data.error) {
               errorHtml = '⚠️ ' + escapeHtml(data.error);
+            } else {
+              errorHtml = '⚠️ Unable to connect to AI assistant (HTTP ' + response.status + '). Please try again.';
             }
 
             addAIMessage(errorHtml, false, true, function() {
