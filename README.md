@@ -72,6 +72,12 @@ The project was developed as a Product Management and Conversion Rate Optimizati
 * **Safe Rendering & Error Recovery:** Formats responses cleanly with bold text and bullet lists while preventing XSS risks. Includes automatic error detection (e.g. missing API key, rate limits) and a single-click "Try Again" retry action.
 * **Security & Credential Protection:** The Gemini API key is read exclusively from the server-side `GEMINI_API_KEY` environment variable in Vercel. No keys or credentials are ever exposed in client-side code, HTML, or Git commits.
 
+### 9. Amazon-Style Review Summary & Topic Insights ("Customers say")
+* **"Customers say" Summary:** Positioned directly above the review cards in the reviews section, providing a scannable 3-sentence synthesis of common customer feedback: skin smoothness and elasticity improvements, genuine Korean sourcing, fast dispatch, and balanced expectations regarding multi-week consistency.
+* **Interactive Topic Chips:** Compact filter chips styled with subtle green upward indicators (`↗`) for positive sentiment (`Quality`, `Skin results`, `Delivery`, `Taste & mixing`) and muted grey downward indicators (`↘`) for mixed sentiment (`Price & value`).
+* **Client-Side Live Filtering:** Clicking any topic chip filters review cards in real time, displays an active filter count badge with a single-click "Clear filter" action, and supports full keyboard accessibility (`Enter` / `Space`).
+* **Transparent Data Integrity:** Genuine customer reviews retain verified buyer badging (`✓ Verified Buyer`), while prototype demonstration reviews are transparently labeled (`⚡ Prototype Demo Review`) to prevent misrepresenting sample data as verified customer feedback.
+
 ---
 
 ## 🛠️ Technology Stack
